@@ -1,0 +1,52 @@
+{
+  "name": "msg-vector-search",
+  "version": "1.0.0",
+  "description": "MCP server for semantic search of SeaTalk conversations using vector embeddings",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch", 
+    "start": "node dist/index.js",
+    "postinstall": "npm run build"
+  },
+  "bin": {
+    "msg-vector-search": "./dist/index.js"
+  },
+  "preferGlobal": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agentcluck77/msg-vector-search.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "semantic-search",
+    "vector-search",
+    "seatalk",
+    "embeddings",
+    "rag"
+  ],
+  "author": "agentcluck77",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.4.0",
+    "python-bridge": "^1.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist/**/*",
+    "python_bridge.py",
+    "config.py",
+    "src/**/*",
+    "requirements.txt",
+    "README.md",
+    "INSTALL.md",
+    "main.py"
+  ]
+} 
