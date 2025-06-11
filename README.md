@@ -1,4 +1,4 @@
-# msg-vector-search
+# 🔍 msg-vector-search
 
 MCP tool for semantic search of SeaTalk conversations using vector embeddings.
 
@@ -11,7 +11,11 @@ This tool provides semantic search capabilities for SeaTalk conversations by:
 3. Automatically updating the search index when new messages are available
 4. Providing search results ranked by semantic similarity
 
-## Quick Setup (NO CODE)
+## 📋 Prerequisites
+
+- **Node.js 18+**: Required for the MCP server
+
+## 🔧 Installation & Setup
 
 ### 1. Install the tool
 
@@ -58,23 +62,36 @@ Replace `YOUR_USERNAME` with your actual username and `your-seatalk-db-key` with
 
 That's it! No coding or additional configuration needed.
 
-## Common SeaTalk Locations
+## 📂 Common SeaTalk Locations
 
 - macOS: `~/Library/Application Support/SeaTalk`
 - Windows: `%APPDATA%\\SeaTalk`
 - Linux: `~/.config/SeaTalk`
 
-## Usage
+## 🔍 Usage
 
 Once installed, you can use the tool directly from Claude:
 
 1. Ask Claude questions about your SeaTalk conversations
 2. Claude will automatically search through your messages using semantic search
 
-Examples:
+### Examples:
 - "Find conversations where we discussed the project timeline"
 - "When did we last talk about the budget?"
 - "Show me messages about the design review"
+
+## 🛠️ Troubleshooting
+
+If you encounter any issues:
+
+1. Make sure Node.js 18+ is installed
+2. Check that the SeaTalk folder path is correct
+3. Verify that your SeaTalk DB key is correct
+4. Restart Claude Desktop after making changes
+
+## 🔒 Security
+
+Your messages never leave your computer. All processing happens locally.
 
 ## Development
 
