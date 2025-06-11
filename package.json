@@ -31,10 +31,10 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.4.0",
-    "python-bridge": "^1.1.0"
+    "python-bridge": "^1.1.0",
+    "typescript": "^5.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.0.0",
     "@types/node": "^20.0.0"
   },
   "engines": {

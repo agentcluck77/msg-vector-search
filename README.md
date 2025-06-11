@@ -20,6 +20,20 @@ This tool provides semantic search capabilities for SeaTalk conversations by:
 npm install -g github:agentcluck77/msg-vector-search
 ```
 
+If you encounter any issues with the global installation, you can also clone and install manually:
+
+```bash
+# Clone the repository
+git clone https://github.com/agentcluck77/msg-vector-search.git
+cd msg-vector-search
+
+# Install dependencies and build
+npm install
+
+# Create a global symlink
+npm link
+```
+
 ### 2. Configure in Claude Desktop
 
 Add this to your Claude Desktop config file (`~/Library/Application Support/Claude/claude_desktop_config.json`):
@@ -31,14 +45,14 @@ Add this to your Claude Desktop config file (`~/Library/Application Support/Clau
       "command": "msg-vector-search",
       "env": {
         "SEATALK_FOLDER": "/Users/YOUR_USERNAME/Library/Application Support/SeaTalk",
-        "SEATALK_DB_KEY": "40a3884b8b032e6f732174"
+        "SEATALK_DB_KEY": "your-seatalk-db-key"
       }
     }
   }
 }
 ```
 
-Replace `YOUR_USERNAME` with your actual username.
+Replace `YOUR_USERNAME` with your actual username and `your-seatalk-db-key` with your actual SeaTalk database key.
 
 ### 3. Restart Claude Desktop
 
@@ -47,6 +61,8 @@ That's it! No coding or additional configuration needed.
 ## Common SeaTalk Locations
 
 - macOS: `~/Library/Application Support/SeaTalk`
+- Windows: `%APPDATA%\\SeaTalk`
+- Linux: `~/.config/SeaTalk`
 
 ## Usage
 
