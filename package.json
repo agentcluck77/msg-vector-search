@@ -8,11 +8,19 @@
     "build": "tsc",
     "dev": "tsc --watch", 
     "start": "node dist/index.js",
-    "postinstall": "npm run build"
+    "prepare": "npm run build"
   },
   "bin": {
     "msg-vector-search": "./dist/index.js"
   },
+  "files": [
+    "dist/",
+    "src/",
+    "python_bridge.py",
+    "config.py",
+    "requirements.txt",
+    "README.md"
+  ],
   "preferGlobal": true,
   "repository": {
     "type": "git",
@@ -31,23 +39,13 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.4.0",
-    "python-bridge": "^1.1.0",
-    "typescript": "^5.0.0"
+    "python-bridge": "^1.1.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "files": [
-    "dist/**/*",
-    "python_bridge.py",
-    "config.py",
-    "src/**/*",
-    "requirements.txt",
-    "README.md",
-    "INSTALL.md",
-    "main.py"
-  ]
+  }
 } 
