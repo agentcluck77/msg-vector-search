@@ -18,7 +18,7 @@ VECTOR_DATA_DIR = DATA_DIR / "vectors"
 LOGS_DIR = PROJECT_ROOT / "logs"
 
 # Database configuration
-DB_KEY = os.getenv('SEATALK_DB_KEY')
+DB_KEY = os.getenv('SEATALK_DB_KEY')  # Must be provided via environment variable
 DB_TYPE = 'WxSQLite3'
 DB_PATH = os.getenv('SEATALK_FOLDER')  # Path to SeaTalk database folder
 CIPHER = 'sqleet: ChaCha20-Poly1305'
@@ -31,22 +31,14 @@ BATCH_SIZE = 32
 # Available embedding models
 AVAILABLE_EMBEDDING_MODELS = {
     "all-MiniLM-L6-v2": {
-        "name": "all-MiniLM-L6-v2", 
+        "name": "all-MiniLM-L6-v2",
         "dimension": 384,
-        "description": "Original English-focused model",
-        "languages": "Primarily English"
+        "description": "Fast and efficient general-purpose embedding model"
     },
-    "intfloat/multilingual-e5-small": {
-        "name": "intfloat/multilingual-e5-small",
-        "dimension": 384,
-        "description": "Fast multilingual model with excellent performance",
-        "languages": "100+ languages including English, Chinese, Southeast Asian, Portuguese"
-    },
-    "paraphrase-multilingual-MiniLM-L12-v2": {
-        "name": "paraphrase-multilingual-MiniLM-L12-v2",
-        "dimension": 384, 
-        "description": "High-quality multilingual model (slower)",
-        "languages": "50+ languages including English, Chinese, Southeast Asian, Portuguese"
+    "all-mpnet-base-v2": {
+        "name": "all-mpnet-base-v2",
+        "dimension": 768,
+        "description": "Higher quality but slower embedding model"
     }
 }
 
@@ -58,9 +50,9 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
-# Create directories
-for dir_path in [DATA_DIR, PROCESSED_DATA_DIR, VECTOR_DATA_DIR, LOGS_DIR]:
-    dir_path.mkdir(parents=True, exist_ok=True)
+# Create directories if they don't exist
+for directory in [DATA_DIR, PROCESSED_DATA_DIR, VECTOR_DATA_DIR, LOGS_DIR]:
+    directory.mkdir(parents=True, exist_ok=True)
 
 # Search Configuration
 SEARCH_CONFIG = {

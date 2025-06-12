@@ -40,18 +40,32 @@ const defaultSeaTalkFolders: Record<string, string> = {
   linux: `${os.homedir()}/.config/SeaTalk`
 };
 
-// Default SeaTalk DB key
-const defaultDbKey = '40a3884b8b032e6f732174';
-
 // Get SeaTalk folder from environment variable or use default
 const seatalkFolder = process.env.SEATALK_FOLDER || defaultSeaTalkFolders[process.platform as keyof typeof defaultSeaTalkFolders] || '';
 
-// Get SeaTalk DB key from environment variable or use default
-const seatalkDbKey = process.env.SEATALK_DB_KEY || defaultDbKey;
+// Get SeaTalk DB key from environment variable
+const seatalkDbKey = process.env.SEATALK_DB_KEY;
 
 // Validate configuration
 if (!seatalkFolder) {
   console.error('Error: SEATALK_FOLDER environment variable not set and default location not available for this platform');
+  process.exit(1);
+}
+
+if (!seatalkDbKey) {
+  console.error('Error: SEATALK_DB_KEY environment variable is required');
+  console.error('Please add it to your Claude Desktop config file:');
+  console.error('{');
+  console.error('  "mcpServers": {');
+  console.error('    "msg-vector-search": {');
+  console.error('      "command": "msg-vector-search",');
+  console.error('      "env": {');
+  console.error('        "SEATALK_FOLDER": "/path/to/your/seatalk",');
+  console.error('        "SEATALK_DB_KEY": "your-db-key"');
+  console.error('      }');
+  console.error('    }');
+  console.error('  }');
+  console.error('}');
   process.exit(1);
 }
 
