@@ -10,9 +10,17 @@
     "start": "node dist/index.js"
   },
   "bin": {
-    "msg-vector-search": "./dist/index.js"
+        "msg-vector-search": "./dist/index.js"
   },
-
+  "files": [
+    "dist/",
+    "src/",
+    "python_bridge.py",
+    "config.py",
+    "requirements.txt",
+    "README.md",
+    "package.json"
+  ],
   "preferGlobal": true,
   "repository": {
     "type": "git",
