@@ -12,14 +12,7 @@
   "bin": {
     "msg-vector-search": "./dist/index.js"
   },
-  "files": [
-    "dist/",
-    "src/",
-    "python_bridge.py",
-    "config.py",
-    "requirements.txt",
-    "README.md"
-  ],
+
   "preferGlobal": true,
   "repository": {
     "type": "git",
