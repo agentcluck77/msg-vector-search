@@ -23,25 +23,47 @@ Ask Claude natural questions about your conversations and get contextually relev
 
 ## 🔧 Installation
 
-**Option 1: Quick Install (Recommended)**
+**Step 1: Clone the repository**
 
 ```bash
-# Clone and run the installation script
 git clone https://github.com/agentcluck77/msg-vector-search.git
 cd msg-vector-search
+```
+
+**Step 2: Find your SeaTalk database key**
+
+The key is embedded in your SeaTalk database filename. Look for files like:
+```bash
+ls "/Users/$(whoami)/Library/Application Support/SeaTalk/"
+# Look for: main_XXXXXX.sqlite
+```
+
+The `XXXXXX` part is your database key.
+
+**Step 3: Run setup with full initialization**
+
+```bash
+# Replace YOUR_DB_KEY with your actual SeaTalk database key
+SEATALK_DB_PATH="/Users/$(whoami)/Library/Application Support/SeaTalk" \
+SEATALK_DB_KEY="YOUR_DB_KEY" \
 ./setup.sh
 ```
 
-**Option 2: Manual Steps**
+This will:
+- Install all dependencies (PyTorch, sentence-transformers, etc.)
+- Pre-warm the AI model for fast startup
+- Connect to your SeaTalk database and create embeddings
+- Show progress with a real-time progress bar
+- Verify everything works with a test search
 
+**Alternative: Dependencies-only setup**
+
+If you prefer to set up the database later:
 ```bash
-# Clone the repository
-git clone https://github.com/agentcluck77/msg-vector-search.git
-cd msg-vector-search
-
-# Run the setup script to install dependencies
 ./setup.sh
 ```
+
+This installs dependencies but skips database initialization. The first MCP call will then initialize the database (may take 30-60 seconds).
 
 **Verify installation:**
 
@@ -87,11 +109,12 @@ Configure the tool by adding it to your Claude Desktop MCP configuration file.
 **Find your SeaTalk database key:**
 
 The key is embedded in your SeaTalk database filename. Look for files like:
-```
-/Users/YOUR_USERNAME/Library/Application Support/SeaTalk/main_XXXXXX.sqlite
+```bash
+ls "/Users/$(whoami)/Library/Application Support/SeaTalk/"
+# Look for: main_XXXXXX.sqlite
 ```
 
-The `XXXXXX` part is your database key.
+The `XXXXXX` part is your database key (same key used in installation Step 2).
 
 **After configuration:**
 
@@ -119,6 +142,52 @@ Once configured, the tool works automatically with Claude Desktop. Simply ask Cl
 4. Claude provides you with relevant conversation excerpts and context
 
 **Note:** All processing happens locally on your computer. Your messages never leave your device.
+
+## 🏗️ Technical Architecture
+
+```mermaid
+graph TD
+    A["Claude Desktop"] -->|MCP Protocol| B["FastMCP Server<br/>(src/server.py)"]
+    
+    B --> C["Search Engine<br/>(src/core/search/engine.py)"]
+    
+    C --> D["Database Connection<br/>(src/core/database/connection.py)"]
+    C --> E["Message Processor<br/>(src/core/database/processor.py)"]
+    C --> F["Embedding Processor<br/>(src/core/embeddings/processor.py)"]
+    
+    D -->|Encrypted Access| G["SeaTalk Database<br/>(main_XXXXXX.sqlite)"]
+    D -->|Copy-on-Read| H["Database Snapshot<br/>(data/snapshots/)"]
+    
+    E -->|Extract Messages| H
+    E -->|User Mapping| I["User Name Resolution<br/>(166 real names)"]
+    
+    F -->|Generate Embeddings| J["sentence-transformers<br/>(all-MiniLM-L6-v2)"]
+    F -->|Store Vectors| K["Vector Database<br/>(data/vectors/embeddings.db)"]
+    
+    C -->|Cosine Similarity| L["Search Results<br/>(JSON Response)"]
+    L --> B
+    
+    subgraph "Setup Process"
+        M["setup.sh"] --> N["Install Dependencies<br/>(PyTorch, transformers)"]
+        M --> O["Pre-warm Model<br/>(33s → instant)"]
+        M --> P["Initialize Database<br/>(Process 3,982 messages)"]
+        M --> Q["Progress Bar<br/>(Real-time feedback)"]
+    end
+    
+    subgraph "Data Flow"
+        R["Raw Messages"] --> S["Text Processing"]
+        S --> T["Embedding Generation<br/>(384-dim vectors)"]
+        T --> U["Vector Storage"]
+        U --> V["Semantic Search<br/>(Query → Results)"]
+    end
+    
+    subgraph "Performance Features"
+        W["Persistent Storage<br/>(97.7% cache hit)"]
+        X["Incremental Updates<br/>(Only new messages)"]
+        Y["Fast Startup<br/>(35s → 7.6s)"]
+        Z["Sub-second Search"]
+    end
+```
 
 ## 🔧 Technical Details
 
