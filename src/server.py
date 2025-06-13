@@ -47,6 +47,9 @@ mcp = FastMCP(
     Required environment variables:
     - SEATALK_DB_PATH: Path to the SeaTalk database directory (default: ~/Library/Application Support/SeaTalk)
     - SEATALK_DB_KEY: Database decryption key (required)
+    
+    Optional environment variables:
+    - SEATALK_EMBEDDING_THRESHOLD: Minimum new messages to trigger embedding update (default: 10)
     """
 )
 
@@ -72,14 +75,21 @@ def initialize_search_engine():
             db_path = os.path.expanduser("~/Library/Application Support/SeaTalk")
             os.environ['SEATALK_DB_PATH'] = db_path
         
+        # Get embedding update threshold from environment variable or use default
+        embedding_threshold = int(os.environ.get('SEATALK_EMBEDDING_THRESHOLD', '10'))
+        logger.info(f"Using embedding update threshold: {embedding_threshold} messages")
+        
         # Create data directories if they don't exist
         os.makedirs(os.path.join(os.path.dirname(__file__), "../../data/snapshots"), exist_ok=True)
         os.makedirs(os.path.join(os.path.dirname(__file__), "../../data/vectors"), exist_ok=True)
         
         logger.info(f"Using database path: {db_path}")
         
-        # Initialize search engine
-        search_engine = SemanticSearchEngine(db_path, db_key)
+        # Initialize search engine with configurable threshold
+        search_engine = SemanticSearchEngine(db_path, db_key, embedding_threshold)
+        
+        # Pre-load the embedding model for faster searches
+        search_engine.preload_model()
         
         # Only update embeddings if not already initialized
         # (setup.sh should have already done this)
@@ -136,10 +146,51 @@ def get_database_stats() -> Dict[str, Any]:
     return search_engine.get_database_stats()
 
 @mcp.tool()
+def update_embeddings(ctx: Context = None) -> Dict[str, Any]:
+    """
+    Manually update embeddings for new messages.
+    
+    Returns:
+        A dictionary containing update results and statistics
+    """
+    global search_engine
+    
+    # Try to initialize if not already initialized
+    if not search_engine:
+        search_engine = initialize_search_engine()
+    
+    if not search_engine:
+        return {
+            "status": "error",
+            "error": "Search engine not initialized. Please set SEATALK_DB_KEY in your MCP configuration."
+        }
+    
+    # Log the update request
+    if ctx:
+        ctx.info("Manually updating embeddings...")
+    
+    try:
+        # Force update embeddings
+        results = search_engine.update_embeddings()
+        
+        # Log update results
+        if ctx:
+            ctx.info(f"Updated embeddings: {results['new_messages']} new messages processed")
+        
+        return results
+    except Exception as e:
+        logger.error(f"Embedding update error: {e}")
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+@mcp.tool()
 def search_messages(
     query: str,
     limit: int = 30,
     threshold: float = 0.3,
+    force_update: bool = False,
     ctx: Context = None
 ) -> Dict[str, Any]:
     """
@@ -149,6 +200,7 @@ def search_messages(
         query: The search query text
         limit: Maximum number of results to return (default: 30)
         threshold: Minimum similarity threshold (default: 0.3)
+        force_update: Force embedding update before search (default: False)
     
     Returns:
         A dictionary containing search results and metadata
@@ -167,15 +219,16 @@ def search_messages(
     
     # Log the search request
     if ctx:
-        ctx.info(f"Searching for: '{query}' (limit={limit}, threshold={threshold})")
+        ctx.info(f"Searching for: '{query}' (limit={limit}, threshold={threshold}, force_update={force_update})")
     
     try:
-        # Perform search
+        # Perform search with optional forced update
         results = search_engine.search(
             query=query,
             limit=limit,
             similarity_threshold=threshold,
-            include_context=True
+            include_context=True,
+            force_update=force_update
         )
         
         # Log search results

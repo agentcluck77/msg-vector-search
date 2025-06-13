@@ -17,7 +17,12 @@ try:
     import apsw
     # Only print version info if not called from MCP server
     if not os.environ.get('MCP_SERVER_MODE'):
-        sys.stderr.write(f"Using APSW-SQLite3MC version: {apsw.apswversion()}\n")
+        try:
+            # Try different version attribute names
+            version = getattr(apsw, 'apswversion', lambda: getattr(apsw, '__version__', 'unknown'))()
+            sys.stderr.write(f"Using APSW-SQLite3MC version: {version}\n")
+        except:
+            sys.stderr.write("Using APSW-SQLite3MC (version unknown)\n")
 except ImportError:
     print("Error: apsw-sqlite3mc not installed. Install with: uv sync")
     raise

@@ -17,16 +17,18 @@ logger = logging.getLogger(__name__)
 class SemanticSearchEngine:
     """Semantic search engine for SeaTalk messages"""
     
-    def __init__(self, db_path: str = None, db_key: str = None):
+    def __init__(self, db_path: str = None, db_key: str = None, embedding_update_threshold: int = 10):
         """
         Initialize the semantic search engine
         
         Args:
             db_path: Path to the SeaTalk database directory
             db_key: Database decryption key
+            embedding_update_threshold: Minimum new messages to trigger embedding update (default: 10)
         """
         # Initialize components
         self.database = SeaTalkDatabase(db_path, db_key)
+        self.embedding_update_threshold = embedding_update_threshold
         
         # Connect to database
         if not self.database.connect():
@@ -34,6 +36,18 @@ class SemanticSearchEngine:
             
         self.message_processor = MessageProcessor(self.database)
         self.embedding_processor = EmbeddingProcessor(self.database)
+        
+    def preload_model(self):
+        """
+        Pre-load the embedding model to avoid delays during search operations
+        """
+        logger.info("Pre-loading embedding model...")
+        try:
+            # This will load the model into memory
+            self.embedding_processor.load_model()
+            logger.info("✅ Embedding model pre-loaded successfully")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to pre-load embedding model: {e}")
         
     def update_embeddings(self) -> Dict[str, Any]:
         """
@@ -83,7 +97,8 @@ class SemanticSearchEngine:
         similarity_threshold: float = 0.3,
         include_context: bool = True,
         conversation_type: Optional[str] = None,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        force_update: bool = False
     ) -> Dict[str, Any]:
         """
         Search for messages using semantic similarity
@@ -95,6 +110,7 @@ class SemanticSearchEngine:
             include_context: Include context information in results
             conversation_type: Filter by conversation type
             session_id: Filter by session ID
+            force_update: Force embedding update even if not needed
             
         Returns:
             Dictionary with search results and metadata
@@ -102,8 +118,28 @@ class SemanticSearchEngine:
         start_time = time.time()
         logger.info(f"Searching for: '{query}'")
         
-        # First, update embeddings to include any new messages
-        self.update_embeddings()
+        # Only update embeddings if forced or if we detect new messages
+        if force_update:
+            self.update_embeddings()
+        else:
+            # Quick check: only update if we detect significant new messages
+            # Get current message count from main database
+            if self.database.conn:
+                cursor = self.database.get_cursor()
+                cursor.execute("SELECT COUNT(*) FROM chat_message")
+                total_messages = cursor.fetchone()[0]
+                
+                # Get embedded message count
+                stats = self.get_database_stats()
+                embedded_messages = stats.get('embedded_messages', 0)
+                
+                # Only update if there's a significant difference (more than threshold new messages)
+                if total_messages - embedded_messages > self.embedding_update_threshold:
+                    logger.info(f"Detected {total_messages - embedded_messages} new messages, updating embeddings...")
+                    self.update_embeddings()
+                else:
+                    logger.debug(f"Skipping embedding update - only {total_messages - embedded_messages} new messages (threshold: {self.embedding_update_threshold})")
+                    logger.info(f"Using existing embeddings ({embedded_messages} messages, {total_messages - embedded_messages} new messages below threshold)")
         
         # Ensure database is connected
         if not self.database.conn:

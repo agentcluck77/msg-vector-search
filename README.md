@@ -89,7 +89,8 @@ Configure the tool by adding it to your Claude Desktop MCP configuration file.
       ],
       "env": {
         "SEATALK_DB_PATH": "/Users/YOUR_USERNAME/Library/Application Support/SeaTalk",
-        "SEATALK_DB_KEY": "your-seatalk-db-key"
+        "SEATALK_DB_KEY": "your-seatalk-db-key",
+        "SEATALK_EMBEDDING_THRESHOLD": "50"
       }
     }
   }
@@ -101,6 +102,20 @@ Configure the tool by adding it to your Claude Desktop MCP configuration file.
 * `YOUR_USERNAME` - Your actual macOS username
 * `/path/to/msg-vector-search` - Full path to where you cloned this repository
 * `your-seatalk-db-key` - Your actual SeaTalk database key
+
+**Configuration Options:**
+
+* `SEATALK_DB_PATH` - Path to SeaTalk database directory (required)
+* `SEATALK_DB_KEY` - Database decryption key (required)
+* `SEATALK_EMBEDDING_THRESHOLD` - Minimum new messages to trigger embedding update (optional, default: 10)
+
+**Performance Tuning:**
+
+The `SEATALK_EMBEDDING_THRESHOLD` controls when embeddings are updated during search:
+
+* **Lower values (1-10)**: More responsive to new messages, but may cause delays during active chat periods
+* **Higher values (50-100)**: Faster searches during active use, but newer messages may not appear in results immediately
+* **Recommended**: 10-50 depending on your SeaTalk usage patterns
 
 **Get your SeaTalk database key:**
 
