@@ -45,11 +45,12 @@ class SemanticSearchEngine:
         start_time = time.time()
         logger.info("Updating embeddings...")
         
-        # Get last processed timestamp
-        last_timestamp = self.message_processor.get_last_processed_timestamp()
+        # Get last processed timestamp from vector database
+        vector_db = getattr(self.embedding_processor, 'vector_db', None)
+        last_timestamp = self.message_processor.get_last_processed_timestamp(vector_db)
         
         # Process new messages
-        messages = self.message_processor.process_messages(last_timestamp)
+        messages = self.message_processor.process_messages(last_timestamp, vector_db)
         
         if not messages:
             logger.info("No new messages to process")
@@ -71,7 +72,8 @@ class SemanticSearchEngine:
         return {
             "status": "success",
             "new_messages": stored_count,
-            "update_time_ms": int(update_time * 1000)
+            "update_time_ms": int(update_time * 1000),
+            "processing_time_seconds": update_time
         }
         
     def search(
@@ -173,12 +175,17 @@ class SemanticSearchEngine:
             cursor.execute("SELECT COUNT(*) FROM chat_message")
             total_messages = cursor.fetchone()[0]
             
-            # Get embedded messages
-            cursor.execute("SELECT COUNT(*) FROM message_embeddings")
-            embedded_messages = cursor.fetchone()[0]
+            # Get embedded messages from persistent vector database
+            if hasattr(self.embedding_processor, 'vector_db') and self.embedding_processor.vector_db:
+                vector_cursor = self.embedding_processor.vector_db.cursor()
+                vector_cursor.execute("SELECT COUNT(*) FROM message_embeddings")
+                embedded_messages = vector_cursor.fetchone()[0]
+            else:
+                embedded_messages = 0
             
-            # Get last processed timestamp
-            last_timestamp = self.message_processor.get_last_processed_timestamp()
+            # Get last processed timestamp from vector database
+            vector_db = getattr(self.embedding_processor, 'vector_db', None)
+            last_timestamp = self.message_processor.get_last_processed_timestamp(vector_db)
             
             # Format last processed time
             last_processed_time = "Never"

@@ -73,6 +73,7 @@ class SeaTalkDatabase:
     def create_snapshot(self, db_path: str) -> str:
         """
         Create a snapshot of the database to avoid conflicts with running SeaTalk
+        Reuses existing snapshots if they're recent and match the source database
         
         Args:
             db_path: Path to the original database file
@@ -84,14 +85,38 @@ class SeaTalkDatabase:
         snapshots_dir = os.path.join(os.path.dirname(__file__), "../../../data/snapshots")
         os.makedirs(snapshots_dir, exist_ok=True)
         
-        # Create snapshot filename with timestamp
+        # Get source database modification time and size
+        source_mtime = os.path.getmtime(db_path)
+        source_size = os.path.getsize(db_path)
+        base_name = os.path.basename(db_path)
+        
+        # Look for existing snapshots
+        pattern = os.path.join(snapshots_dir, f"snapshot_*_{base_name}")
+        existing_snapshots = glob.glob(pattern)
+        
+        # Check if we can reuse an existing snapshot
+        for snapshot in existing_snapshots:
+            try:
+                snapshot_mtime = os.path.getmtime(snapshot)
+                snapshot_size = os.path.getsize(snapshot)
+                
+                # Reuse if snapshot is newer than source and same size
+                # (source hasn't been modified since snapshot was created)
+                if snapshot_mtime >= source_mtime and snapshot_size == source_size:
+                    logger.info(f"Reusing existing snapshot: {os.path.basename(snapshot)}")
+                    return snapshot
+            except OSError:
+                # Snapshot file might be corrupted, skip it
+                continue
+        
+        # Create new snapshot if none can be reused
         timestamp = int(time.time())
-        snapshot_filename = f"snapshot_{timestamp}_{os.path.basename(db_path)}"
+        snapshot_filename = f"snapshot_{timestamp}_{base_name}"
         snapshot_path = os.path.join(snapshots_dir, snapshot_filename)
         
         # Copy the database file
         shutil.copy2(db_path, snapshot_path)
-        logger.info(f"Created database snapshot: {snapshot_filename}")
+        logger.info(f"Created new database snapshot: {snapshot_filename}")
         
         return snapshot_path
     

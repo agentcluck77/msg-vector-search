@@ -29,15 +29,23 @@ class MessageProcessor:
         self.database = database
         self.user_mapper = UserMapper(database)
         
-    def get_last_processed_timestamp(self) -> int:
+    def get_last_processed_timestamp(self, vector_db=None) -> int:
         """
-        Get the timestamp of the last processed message
+        Get the timestamp of the last processed message from vector database
+        
+        Args:
+            vector_db: Vector database connection (optional)
         
         Returns:
             Timestamp as integer, or 0 if no messages have been processed
         """
         try:
-            cursor = self.database.get_cursor()
+            # Use provided vector_db or try to use main database
+            if vector_db:
+                cursor = vector_db.cursor()
+            else:
+                cursor = self.database.get_cursor()
+                
             cursor.execute("""
                 SELECT value FROM vector_metadata
                 WHERE key = 'last_processed_timestamp'
@@ -51,15 +59,20 @@ class MessageProcessor:
             logger.warning(f"⚠️ Could not get last processed timestamp: {e}")
             return 0
             
-    def update_last_processed_timestamp(self, timestamp: int) -> None:
+    def update_last_processed_timestamp(self, timestamp: int, vector_db=None) -> None:
         """
-        Update the timestamp of the last processed message
+        Update the timestamp of the last processed message in vector database
         
         Args:
             timestamp: Timestamp to store
+            vector_db: Vector database connection (optional)
         """
         try:
-            cursor = self.database.get_cursor()
+            # Use provided vector_db or try to use main database
+            if vector_db:
+                cursor = vector_db.cursor()
+            else:
+                cursor = self.database.get_cursor()
             
             # Check if table exists
             cursor.execute("""
@@ -289,12 +302,13 @@ class MessageProcessor:
             
         return context
     
-    def process_messages(self, since_timestamp: Optional[int] = None) -> List[Dict[str, Any]]:
+    def process_messages(self, since_timestamp: Optional[int] = None, vector_db=None) -> List[Dict[str, Any]]:
         """
         Process messages from the database
         
         Args:
             since_timestamp: Only process messages after this timestamp
+            vector_db: Vector database connection for timestamp tracking
             
         Returns:
             List of processed messages
@@ -303,7 +317,7 @@ class MessageProcessor:
         
         # Use provided timestamp or get last processed timestamp
         if since_timestamp is None:
-            since_timestamp = self.get_last_processed_timestamp()
+            since_timestamp = self.get_last_processed_timestamp(vector_db)
             
         try:
             # Ensure database is connected
@@ -375,7 +389,7 @@ class MessageProcessor:
             
             # Update last processed timestamp
             if latest_timestamp > since_timestamp:
-                self.update_last_processed_timestamp(latest_timestamp)
+                self.update_last_processed_timestamp(latest_timestamp, vector_db)
             
             logger.info(f"✓ Processed {len(messages)} new messages")
             return messages

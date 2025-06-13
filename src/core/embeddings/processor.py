@@ -13,6 +13,7 @@ from typing import List, Dict, Any, Optional, Union
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
+import apsw
 
 from ..database.connection import SeaTalkDatabase
 from ..database.user_mapper import UserMapper
@@ -53,16 +54,20 @@ class EmbeddingProcessor:
             raise
     
     def setup_vector_database(self) -> None:
-        """Set up vector database tables"""
-        logger.info("Setting up vector database...")
+        """Set up persistent vector database tables"""
+        logger.info("Setting up persistent vector database...")
         
         try:
-            # Ensure database is connected
-            if not self.database.conn:
-                if not self.database.connect():
-                    raise RuntimeError("Failed to connect to database")
+            # Create persistent vector database path
+            vectors_dir = os.path.join(os.path.dirname(__file__), "../../../data/vectors")
+            os.makedirs(vectors_dir, exist_ok=True)
             
-            cursor = self.database.get_cursor()
+            self.vector_db_path = os.path.join(vectors_dir, "embeddings.db")
+            
+            # Connect to persistent vector database
+            self.vector_db = apsw.Connection(self.vector_db_path)
+            
+            cursor = self.vector_db.cursor()
             
             # Check if tables exist
             cursor.execute("""
@@ -103,12 +108,12 @@ class EmbeddingProcessor:
                     )
                 """)
                 
-                logger.info("Vector database tables created")
+                logger.info("Persistent vector database tables created")
             else:
-                logger.info("Vector database tables already exist")
+                logger.info("Persistent vector database tables already exist")
                 
         except Exception as e:
-            logger.error(f"Failed to set up vector database: {e}")
+            logger.error(f"Failed to set up persistent vector database: {e}")
             raise
     
     def generate_embeddings(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -163,15 +168,11 @@ class EmbeddingProcessor:
         logger.info(f"Storing {len(messages_with_embeddings)} embeddings...")
         
         try:
-            # Ensure database is connected
-            if not self.database.conn:
-                if not self.database.connect():
-                    raise RuntimeError("Failed to connect to database")
-            
-            # Make sure tables exist
-            self.setup_vector_database()
+            # Ensure vector database is set up
+            if not self.vector_db:
+                self.setup_vector_database()
                 
-            cursor = self.database.get_cursor()
+            cursor = self.vector_db.cursor()
             count = 0
             
             # Begin transaction for better performance
@@ -216,9 +217,9 @@ class EmbeddingProcessor:
             
         except Exception as e:
             # Rollback transaction on error
-            if self.database.conn:
+            if self.vector_db:
                 try:
-                    cursor = self.database.get_cursor()
+                    cursor = self.vector_db.cursor()
                     cursor.execute("ROLLBACK")
                 except:
                     pass
@@ -270,10 +271,9 @@ class EmbeddingProcessor:
         Returns:
             List of similar messages
         """
-        # Ensure database is connected
-        if not self.database.conn:
-            if not self.database.connect():
-                raise RuntimeError("Failed to connect to database")
+        # Ensure vector database is set up
+        if not self.vector_db:
+            self.setup_vector_database()
         
         # Load model if not already loaded
         if not self.model:
@@ -283,8 +283,8 @@ class EmbeddingProcessor:
         start_time = time.time()
         query_embedding = self.model.encode([query], convert_to_tensor=False)[0].tolist()
         
-        # Search in vector database
-        cursor = self.database.get_cursor()
+        # Search in persistent vector database
+        cursor = self.vector_db.cursor()
         
         # Build query conditions
         where_conditions = []
@@ -359,19 +359,25 @@ class EmbeddingProcessor:
             # Get conversation name using similar logic as processor
             conversation_name = None
             if result['conversation_type'] == 'group':
-                # Try to get group name from database
+                # Try to get group name from main database
                 try:
                     session_id = result['session_id']
                     
+                    # Ensure main database is connected
+                    if not self.database.conn:
+                        if not self.database.connect():
+                            raise RuntimeError("Failed to connect to main database")
+                    
                     # Method 1: Try to find group name in chat messages with group info
-                    cursor.execute("""
+                    main_cursor = self.database.get_cursor()
+                    main_cursor.execute("""
                         SELECT c FROM chat_message 
                         WHERE sid = ? AND c LIKE '%"n":%' 
                         AND t IN ('c.g.c.i', 'c.g.a.m', 'system')
                         LIMIT 1
                     """, (session_id,))
                     
-                    row = cursor.fetchone()
+                    row = main_cursor.fetchone()
                     if row:
                         try:
                             content = json.loads(row[0])

@@ -81,9 +81,15 @@ def initialize_search_engine():
         # Initialize search engine
         search_engine = SemanticSearchEngine(db_path, db_key)
         
-        # Update embeddings on startup
-        update_result = search_engine.update_embeddings()
-        logger.info(f"Initial embeddings update: {update_result['new_messages']} new messages")
+        # Only update embeddings if not already initialized
+        # (setup.sh should have already done this)
+        stats = search_engine.get_database_stats()
+        if stats.get('embedded_messages', 0) == 0:
+            logger.info("No embeddings found, running initial embedding update...")
+            update_result = search_engine.update_embeddings()
+            logger.info(f"Initial embeddings update: {update_result['new_messages']} new messages")
+        else:
+            logger.info(f"Found existing embeddings: {stats.get('embedded_messages', 0)} messages")
         
         logger.info("SeaTalk Search MCP server started")
         return search_engine
