@@ -49,7 +49,7 @@ mcp = FastMCP(
     - SEATALK_DB_KEY: Database decryption key (required)
     
     Optional environment variables:
-    - SEATALK_EMBEDDING_THRESHOLD: Minimum new messages to trigger embedding update (default: 10)
+    - SEATALK_EMBEDDING_THRESHOLD: Minimum new messages to trigger embedding update (default: 50)
     """
 )
 
@@ -76,7 +76,7 @@ def initialize_search_engine():
             os.environ['SEATALK_DB_PATH'] = db_path
         
         # Get embedding update threshold from environment variable or use default
-        embedding_threshold = int(os.environ.get('SEATALK_EMBEDDING_THRESHOLD', '10'))
+        embedding_threshold = int(os.environ.get('SEATALK_EMBEDDING_THRESHOLD', '50'))
         logger.info(f"Using embedding update threshold: {embedding_threshold} messages")
         
         # Create data directories if they don't exist
@@ -93,13 +93,20 @@ def initialize_search_engine():
         
         # Only update embeddings if not already initialized
         # (setup.sh should have already done this)
+        # Force vector DB connection before checking stats
+        search_engine.embedding_processor.setup_vector_database()
+        
         stats = search_engine.get_database_stats()
-        if stats.get('embedded_messages', 0) == 0:
+        embedded_count = stats.get('embedded_messages', 0)
+        
+        logger.info(f"Current embedding stats: {embedded_count} embedded messages")
+        
+        if embedded_count == 0:
             logger.info("No embeddings found, running initial embedding update...")
             update_result = search_engine.update_embeddings()
             logger.info(f"Initial embeddings update: {update_result['new_messages']} new messages")
         else:
-            logger.info(f"Found existing embeddings: {stats.get('embedded_messages', 0)} messages")
+            logger.info(f"Found existing embeddings: {embedded_count} messages - skipping initialization")
         
         logger.info("SeaTalk Search MCP server started")
         return search_engine

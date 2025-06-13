@@ -40,13 +40,24 @@ class UserMapper:
                 self._user_cache = {int(uid): name for uid, name in cache_data.items()}
                 self._cache_loaded = True
                 logger.info(f"✓ Loaded {len(self._user_cache)} user mappings from cache")
-                return
+                
+                # Check if cache is recent (less than 24 hours old)
+                cache_age_hours = (time.time() - cache_file.stat().st_mtime) / 3600
+                if cache_age_hours < 24:
+                    logger.info(f"✓ Cache is recent ({cache_age_hours:.1f}h old), skipping database rebuild")
+                    return
+                else:
+                    logger.info(f"⚠️ Cache is old ({cache_age_hours:.1f}h), will refresh if needed")
+                
             except Exception as e:
                 logger.warning(f"Failed to load cache file: {e}, falling back to database")
         
-        # Fallback to comprehensive database extraction
-        logger.info("🔄 Loading user names from database with enhanced extraction...")
-        self._extract_user_names_from_database()
+        # Only do expensive database extraction if cache is missing or very old
+        if not self._user_cache or len(self._user_cache) < 100:
+            logger.info("🔄 Loading user names from database with enhanced extraction...")
+            self._extract_user_names_from_database()
+        else:
+            logger.info("✓ Using existing cache, skipping expensive database rebuild")
         
         self._cache_loaded = True
         logger.info(f"✓ Loaded {len(self._user_cache)} user mappings")

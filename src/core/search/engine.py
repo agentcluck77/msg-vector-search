@@ -17,14 +17,14 @@ logger = logging.getLogger(__name__)
 class SemanticSearchEngine:
     """Semantic search engine for SeaTalk messages"""
     
-    def __init__(self, db_path: str = None, db_key: str = None, embedding_update_threshold: int = 10):
+    def __init__(self, db_path: str = None, db_key: str = None, embedding_update_threshold: int = 50):
         """
         Initialize the semantic search engine
         
         Args:
             db_path: Path to the SeaTalk database directory
             db_key: Database decryption key
-            embedding_update_threshold: Minimum new messages to trigger embedding update (default: 10)
+            embedding_update_threshold: Minimum new messages to trigger embedding update (default: 50)
         """
         # Initialize components
         self.database = SeaTalkDatabase(db_path, db_key)
@@ -122,6 +122,10 @@ class SemanticSearchEngine:
         if force_update:
             self.update_embeddings()
         else:
+            # Ensure vector database is set up before checking stats
+            if not hasattr(self.embedding_processor, 'vector_db') or not self.embedding_processor.vector_db:
+                self.embedding_processor.setup_vector_database()
+            
             # Quick check: only update if we detect significant new messages
             # Get current message count from main database
             if self.database.conn:
@@ -210,6 +214,10 @@ class SemanticSearchEngine:
             # Get total messages
             cursor.execute("SELECT COUNT(*) FROM chat_message")
             total_messages = cursor.fetchone()[0]
+            
+            # Ensure vector database is set up before querying
+            if not hasattr(self.embedding_processor, 'vector_db') or not self.embedding_processor.vector_db:
+                self.embedding_processor.setup_vector_database()
             
             # Get embedded messages from persistent vector database
             if hasattr(self.embedding_processor, 'vector_db') and self.embedding_processor.vector_db:
