@@ -30,15 +30,9 @@ git clone https://github.com/agentcluck77/msg-vector-search.git
 cd msg-vector-search
 ```
 
-**Step 2: Find your SeaTalk database key**
+**Step 2: Get your SeaTalk database key**
 
-The key is embedded in your SeaTalk database filename. Look for files like:
-```bash
-ls "/Users/$(whoami)/Library/Application Support/SeaTalk/"
-# Look for: main_XXXXXX.sqlite
-```
-
-The `XXXXXX` part is your database key.
+The database key must be obtained from your SeaTalk administrator. It is not embedded in filenames or discoverable through the filesystem.
 
 **Step 3: Run setup with full initialization**
 
@@ -106,15 +100,9 @@ Configure the tool by adding it to your Claude Desktop MCP configuration file.
 * `/path/to/msg-vector-search` - Full path to where you cloned this repository
 * `your-seatalk-db-key` - Your actual SeaTalk database key
 
-**Find your SeaTalk database key:**
+**Get your SeaTalk database key:**
 
-The key is embedded in your SeaTalk database filename. Look for files like:
-```bash
-ls "/Users/$(whoami)/Library/Application Support/SeaTalk/"
-# Look for: main_XXXXXX.sqlite
-```
-
-The `XXXXXX` part is your database key (same key used in installation Step 2).
+The database key must be obtained from your SeaTalk administrator (same key used in installation Step 2). It is not embedded in filenames or discoverable through the filesystem.
 
 **After configuration:**
 
@@ -169,7 +157,7 @@ graph TD
     
     C --> D["Message Processor"]
     D -->|Extract Messages| E["Text Content"]
-    D -->|User Mapping| F["User Name Resolution<br/>(166 real names)"]
+    D -->|User Mapping| F["User Name Resolution<br/>(Real names from messages)"]
     
     E --> G["Embedding Processor"]
     G -->|Generate Embeddings| H["sentence-transformers<br/>(all-MiniLM-L6-v2)"]
@@ -182,9 +170,9 @@ graph TD
 graph TD
     A["./setup.sh"] --> B["Check Environment<br/>(SEATALK_DB_PATH & KEY)"]
     B --> C["Install Dependencies<br/>(PyTorch, transformers)"]
-    C --> D["Pre-warm Model<br/>(33s → instant startup)"]
+    C --> D["Pre-warm Model<br/>(Faster startup)"]
     D --> E["Connect to SeaTalk DB"]
-    E --> F["Process Messages<br/>(3,982 total)"]
+    E --> F["Process Messages<br/>(All conversations)"]
     F --> G["Generate Embeddings<br/>(384-dim vectors)"]
     G --> H["Store in Vector DB"]
     H --> I["Progress Bar<br/>(Real-time feedback)"]
@@ -195,12 +183,12 @@ graph TD
 
 ```mermaid
 graph LR
-    A["Performance Features"] --> B["Persistent Storage<br/>(97.7% cache hit)"]
+    A["Performance Features"] --> B["Persistent Storage<br/>(High cache hit rate)"]
     A --> C["Incremental Updates<br/>(Only new messages)"]
-    A --> D["Fast Startup<br/>(35s → 7.6s)"]
+    A --> D["Fast Startup<br/>(Optimized initialization)"]
     A --> E["Sub-second Search<br/>(Cosine similarity)"]
     
-    B --> F["Reuse Embeddings<br/>(3,889/3,982 cached)"]
+    B --> F["Reuse Embeddings<br/>(Previously processed)"]
     C --> G["Timestamp Tracking<br/>(Vector DB metadata)"]
     D --> H["Pre-warmed Model<br/>(No download delay)"]
     E --> I["Efficient Vectors<br/>(384 dimensions)"]
