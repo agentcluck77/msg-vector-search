@@ -20,6 +20,8 @@ Ask Claude natural questions about your conversations and get contextually relev
 * **uv** package manager: Install with `curl -LsSf https://astral.sh/uv/install.sh | sh`
 * **SeaTalk app** installed on macOS
 * **Claude Desktop** app
+* **Python 3.10+** (automatically managed by uv)
+* **Compatible with both Intel and Apple Silicon Macs**
 
 ## 🔧 Installation
 
@@ -211,6 +213,17 @@ graph LR
 1. **Ensure uv is installed**: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 2. **Re-run setup**: `./setup.sh`
 3. **Check PATH**: Restart your terminal after installing uv
+
+**NumPy Compatibility Issues:**
+
+If you see NumPy 2.x compatibility errors:
+```bash
+# Clear UV cache and reinstall
+rm -rf ~/.cache/uv
+./setup.sh
+```
+
+This project pins NumPy to 1.x for PyTorch compatibility. The setup script will detect and handle version conflicts automatically.
 
 ### Claude Desktop Integration Issues
 

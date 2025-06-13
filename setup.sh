@@ -24,12 +24,37 @@ import sys
 sys.path.insert(0, 'src')
 
 print('✅ Installing core dependencies...')
-import torch
-import sentence_transformers
-import numpy as np
-import apsw
 
-print('✅ Core dependencies installed successfully!')
+try:
+    import numpy as np
+    numpy_version = np.__version__
+    print(f'   📦 NumPy version: {numpy_version}')
+    
+    # Check for NumPy 2.x compatibility issues
+    if numpy_version.startswith('2.'):
+        print('   ⚠️  NumPy 2.x detected - checking PyTorch compatibility...')
+    
+    import torch
+    print(f'   📦 PyTorch version: {torch.__version__}')
+    
+    import sentence_transformers
+    print(f'   📦 sentence-transformers loaded successfully')
+    
+    import apsw
+    print('   📦 APSW-SQLite3MC loaded successfully')
+    
+    print('✅ Core dependencies installed successfully!')
+    
+except ImportError as e:
+    print(f'❌ Dependency import error: {e}')
+    print('   Try updating your dependencies or check for compatibility issues')
+    sys.exit(1)
+except Exception as e:
+    print(f'❌ Unexpected error loading dependencies: {e}')
+    if 'numpy' in str(e).lower():
+        print('   This may be a NumPy compatibility issue.')
+        print('   Try: pip install \"numpy<2\" torch --upgrade')
+    sys.exit(1)
 "
 
 if [ $? -ne 0 ]; then
