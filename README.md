@@ -145,48 +145,65 @@ Once configured, the tool works automatically with Claude Desktop. Simply ask Cl
 
 ## 🏗️ Technical Architecture
 
+### Core System Architecture
+
 ```mermaid
 graph TD
     A["Claude Desktop"] -->|MCP Protocol| B["FastMCP Server<br/>(src/server.py)"]
-    
     B --> C["Search Engine<br/>(src/core/search/engine.py)"]
     
     C --> D["Database Connection<br/>(src/core/database/connection.py)"]
     C --> E["Message Processor<br/>(src/core/database/processor.py)"]
     C --> F["Embedding Processor<br/>(src/core/embeddings/processor.py)"]
     
-    D -->|Encrypted Access| G["SeaTalk Database<br/>(main_XXXXXX.sqlite)"]
-    D -->|Copy-on-Read| H["Database Snapshot<br/>(data/snapshots/)"]
+    C -->|Cosine Similarity| G["Search Results<br/>(JSON Response)"]
+    G --> B
+```
+
+### Database & Storage Flow
+
+```mermaid
+graph TD
+    A["SeaTalk Database<br/>(main_XXXXXX.sqlite)"] -->|Encrypted Access| B["Database Connection"]
+    B -->|Copy-on-Read| C["Database Snapshot<br/>(data/snapshots/)"]
     
-    E -->|Extract Messages| H
-    E -->|User Mapping| I["User Name Resolution<br/>(166 real names)"]
+    C --> D["Message Processor"]
+    D -->|Extract Messages| E["Text Content"]
+    D -->|User Mapping| F["User Name Resolution<br/>(166 real names)"]
     
-    F -->|Generate Embeddings| J["sentence-transformers<br/>(all-MiniLM-L6-v2)"]
-    F -->|Store Vectors| K["Vector Database<br/>(data/vectors/embeddings.db)"]
+    E --> G["Embedding Processor"]
+    G -->|Generate Embeddings| H["sentence-transformers<br/>(all-MiniLM-L6-v2)"]
+    H --> I["Vector Database<br/>(data/vectors/embeddings.db)"]
+```
+
+### Setup & Initialization Process
+
+```mermaid
+graph TD
+    A["./setup.sh"] --> B["Check Environment<br/>(SEATALK_DB_PATH & KEY)"]
+    B --> C["Install Dependencies<br/>(PyTorch, transformers)"]
+    C --> D["Pre-warm Model<br/>(33s → instant startup)"]
+    D --> E["Connect to SeaTalk DB"]
+    E --> F["Process Messages<br/>(3,982 total)"]
+    F --> G["Generate Embeddings<br/>(384-dim vectors)"]
+    G --> H["Store in Vector DB"]
+    H --> I["Progress Bar<br/>(Real-time feedback)"]
+    I --> J["Test Search<br/>(Verify functionality)"]
+```
+
+### Performance Optimizations
+
+```mermaid
+graph LR
+    A["Performance Features"] --> B["Persistent Storage<br/>(97.7% cache hit)"]
+    A --> C["Incremental Updates<br/>(Only new messages)"]
+    A --> D["Fast Startup<br/>(35s → 7.6s)"]
+    A --> E["Sub-second Search<br/>(Cosine similarity)"]
     
-    C -->|Cosine Similarity| L["Search Results<br/>(JSON Response)"]
-    L --> B
-    
-    subgraph "Setup Process"
-        M["setup.sh"] --> N["Install Dependencies<br/>(PyTorch, transformers)"]
-        M --> O["Pre-warm Model<br/>(33s → instant)"]
-        M --> P["Initialize Database<br/>(Process 3,982 messages)"]
-        M --> Q["Progress Bar<br/>(Real-time feedback)"]
-    end
-    
-    subgraph "Data Flow"
-        R["Raw Messages"] --> S["Text Processing"]
-        S --> T["Embedding Generation<br/>(384-dim vectors)"]
-        T --> U["Vector Storage"]
-        U --> V["Semantic Search<br/>(Query → Results)"]
-    end
-    
-    subgraph "Performance Features"
-        W["Persistent Storage<br/>(97.7% cache hit)"]
-        X["Incremental Updates<br/>(Only new messages)"]
-        Y["Fast Startup<br/>(35s → 7.6s)"]
-        Z["Sub-second Search"]
-    end
+    B --> F["Reuse Embeddings<br/>(3,889/3,982 cached)"]
+    C --> G["Timestamp Tracking<br/>(Vector DB metadata)"]
+    D --> H["Pre-warmed Model<br/>(No download delay)"]
+    E --> I["Efficient Vectors<br/>(384 dimensions)"]
 ```
 
 ## 🔧 Technical Details
