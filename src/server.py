@@ -85,8 +85,12 @@ def initialize_search_engine():
         
         logger.info(f"Using database path: {db_path}")
         
-        # Initialize search engine with configurable threshold
-        search_engine = SemanticSearchEngine(db_path, db_key, embedding_threshold)
+        # Initialize search engine
+        search_engine = SemanticSearchEngine(
+            db_path=db_path, 
+            db_key=db_key, 
+            embedding_update_threshold=embedding_threshold
+        )
         
         # Pre-load the embedding model for faster searches
         search_engine.preload_model()

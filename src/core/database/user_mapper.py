@@ -7,6 +7,7 @@ Extracts and caches user display names from SeaTalk database
 import json
 import logging
 import re
+import time
 from typing import Dict, Optional, Set
 from .connection import SeaTalkDatabase
 from pathlib import Path

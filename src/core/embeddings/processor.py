@@ -21,9 +21,9 @@ from ..database.user_mapper import UserMapper
 logger = logging.getLogger(__name__)
 
 class EmbeddingProcessor:
-    """Processes and stores embeddings for messages"""
+    """Processes and generates embeddings for messages using sentence transformers"""
     
-    def __init__(self, database: SeaTalkDatabase, model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(self, database, model_name: str = "all-MiniLM-L6-v2"):
         """
         Initialize the embedding processor
         
@@ -35,11 +35,15 @@ class EmbeddingProcessor:
         self.model_name = model_name
         self.model = None
         self.vector_db = None
+        self.vector_db_path = None
+        
+        # Import user mapper
+        from ..database.user_mapper import UserMapper
         self.user_mapper = UserMapper(database)
         
         # Create vector database tables if they don't exist
         self.setup_vector_database()
-        
+    
     def load_model(self) -> None:
         """Load the sentence transformer model"""
         logger.info(f"Loading embedding model: {self.model_name}")
@@ -49,6 +53,7 @@ class EmbeddingProcessor:
             self.model = SentenceTransformer(self.model_name)
             load_time = time.time() - start_time
             logger.info(f"Model loaded in {load_time:.2f}s")
+                
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
             raise
@@ -353,7 +358,12 @@ class EmbeddingProcessor:
             
             # Set user fields in the desired format
             result['user_id'] = user_id
-            result['user_name'] = user_name if not user_name.startswith(f'User {user_id}') else None
+            # For fallback names (User {id}), set user_name to the fallback for better display
+            # rather than setting it to None which causes confusion
+            if user_name.startswith(f'User {user_id}'):
+                result['user_name'] = user_name  # Keep the fallback name for display
+            else:
+                result['user_name'] = user_name  # Use the real name
             result['user_code'] = f"User {user_id}"
             
             # Get conversation name using similar logic as processor
@@ -419,12 +429,12 @@ class EmbeddingProcessor:
                     'conversation_code': f"Group {result['session_id']}"
                 }
             else:
-                # For private conversations, use the actual user name (not fallback)
-                actual_user_name = user_name if not user_name.startswith(f'User {result["user_id"]}') else None
+                # For private conversations, use the user name (even if it's a fallback)
+                # This ensures consistency with how user_name is displayed
                 result['conversation'] = {
                     'type': result['conversation_type'],
                     'id': result['user_id'],
-                    'conversation_name': actual_user_name,  # For direct messages, conversation name is the user name
+                    'conversation_name': user_name,  # For direct messages, conversation name is the user name
                     'conversation_code': f"User {result['user_id']}"
                 }
         
