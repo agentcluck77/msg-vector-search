@@ -182,11 +182,33 @@ try:
             # Update embeddings with progress tracking
             print('   ⚡ Processing messages (this may take several minutes)...')
             
-            # We'll simulate progress since we can't easily get real-time updates
-            # In practice, this runs in batches
-            progress.update(50, 'Processing embeddings...')
+            progress.update(50, 'Starting embedding process...')
             
+            # Show that we're actively processing
+            import threading
+            import time
+            
+            # Flag to control the progress animation
+            processing_complete = False
+            
+            def animate_progress():
+                dots = 0
+                while not processing_complete:
+                    dots = (dots + 1) % 4
+                    dot_str = '.' * dots + ' ' * (3 - dots)
+                    progress.update(50 + (dots * 5), f'Processing embeddings{dot_str}')
+                    time.sleep(1)
+            
+            # Start animation thread
+            animation_thread = threading.Thread(target=animate_progress, daemon=True)
+            animation_thread.start()
+            
+            # Run the actual embedding process
             update_result = engine.update_embeddings()
+            
+            # Stop animation
+            processing_complete = True
+            animation_thread.join(timeout=0.1)
             
             new_messages = update_result.get('new_messages', 0)
             processing_time = update_result.get('processing_time_seconds', 0)
@@ -199,10 +221,54 @@ try:
             
         else:
             coverage = (embedded_messages / total_messages * 100) if total_messages > 0 else 0
-            progress.update(90, f'{embedded_messages:,} already embedded')
-            progress.finish(f'Database ready ({coverage:.1f}% coverage)')
+            remaining_messages = total_messages - embedded_messages
             
-            print(f'   ✅ Database already initialized ({embedded_messages:,}/{total_messages:,} messages)')
+            if remaining_messages > 0:
+                print()
+                print(f'   📊 Database has {embedded_messages:,}/{total_messages:,} messages embedded ({coverage:.1f}% coverage)')
+                print(f'   ⚡ Processing remaining {remaining_messages:,} messages...')
+                
+                progress.update(60, 'Processing remaining messages...')
+                
+                # Show that we're actively processing
+                import threading
+                import time
+                
+                # Flag to control the progress animation
+                processing_complete = False
+                
+                def animate_progress():
+                    dots = 0
+                    while not processing_complete:
+                        dots = (dots + 1) % 4
+                        dot_str = '.' * dots + ' ' * (3 - dots)
+                        progress.update(60 + (dots * 5), f'Processing remaining messages{dot_str}')
+                        time.sleep(1)
+                
+                # Start animation thread
+                animation_thread = threading.Thread(target=animate_progress, daemon=True)
+                animation_thread.start()
+                
+                # Run the actual embedding process
+                update_result = engine.update_embeddings()
+                
+                # Stop animation
+                processing_complete = True
+                animation_thread.join(timeout=0.1)
+                
+                new_messages = update_result.get('new_messages', 0)
+                processing_time = update_result.get('processing_time_seconds', 0)
+                
+                progress.update(90, f'Processed {new_messages:,} additional messages')
+                progress.finish(f'Complete! ({processing_time:.1f}s)')
+                
+                print(f'   ✅ Successfully embedded {new_messages:,} additional messages')
+                print(f'   ⏱️  Processing time: {processing_time:.1f} seconds')
+            else:
+                progress.update(90, f'{embedded_messages:,} already embedded')
+                progress.finish(f'Database ready ({coverage:.1f}% coverage)')
+                
+                print(f'   ✅ Database already fully initialized ({embedded_messages:,}/{total_messages:,} messages)')
     else:
         progress.finish('Error')
         print(f'   ❌ Database error: {stats.get(\"error\", \"Unknown error\")}')

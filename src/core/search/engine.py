@@ -29,6 +29,11 @@ class SemanticSearchEngine:
         # Initialize components
         self.database = SeaTalkDatabase(db_path, db_key)
         self.embedding_update_threshold = embedding_update_threshold
+        self.last_embedding_update_time = 0  # Track when embeddings were last updated
+        self.embedding_update_cooldown = 60  # 1 minute cooldown for first few searches
+        self.long_cooldown = 300  # 5 minutes cooldown after initial period
+        self.server_start_time = time.time()  # Track when server started
+        self.search_count = 0  # Track number of searches performed
         
         # Connect to database
         if not self.database.connect():
@@ -80,6 +85,9 @@ class SemanticSearchEngine:
         # Store embeddings
         stored_count = self.embedding_processor.store_embeddings(messages_with_embeddings)
         
+        # Update last embedding update time
+        self.last_embedding_update_time = time.time()
+        
         update_time = time.time() - start_time
         logger.info(f"Embeddings updated in {update_time:.2f}s")
         
@@ -118,32 +126,49 @@ class SemanticSearchEngine:
         start_time = time.time()
         logger.info(f"Searching for: '{query}'")
         
-        # Only update embeddings if forced or if we detect new messages
+        # Increment search counter
+        self.search_count += 1
+        
+        # Only update embeddings if forced or if we detect new messages and enough time has passed
         if force_update:
             self.update_embeddings()
         else:
-            # Ensure vector database is set up before checking stats
-            if not hasattr(self.embedding_processor, 'vector_db') or not self.embedding_processor.vector_db:
-                self.embedding_processor.setup_vector_database()
+            # Check if enough time has passed since last update (cooldown period)
+            current_time = time.time()
+            time_since_last_update = current_time - self.last_embedding_update_time
             
-            # Quick check: only update if we detect significant new messages
-            # Get current message count from main database
-            if self.database.conn:
-                cursor = self.database.get_cursor()
-                cursor.execute("SELECT COUNT(*) FROM chat_message")
-                total_messages = cursor.fetchone()[0]
+            # Use shorter cooldown for first 10 minutes after server startup
+            time_since_startup = current_time - self.server_start_time
+            active_cooldown = self.embedding_update_cooldown if time_since_startup < 600 else self.long_cooldown
+            
+            # For the first 5 searches, be extra conservative and use a higher threshold
+            effective_threshold = self.embedding_update_threshold * 3 if self.search_count <= 5 else self.embedding_update_threshold
+            
+            if time_since_last_update < active_cooldown:
+                logger.debug(f"Skipping embedding update - cooldown period active ({time_since_last_update:.1f}s < {active_cooldown}s)")
+            else:
+                # Ensure vector database is set up before checking stats
+                if not hasattr(self.embedding_processor, 'vector_db') or not self.embedding_processor.vector_db:
+                    self.embedding_processor.setup_vector_database()
                 
-                # Get embedded message count
-                stats = self.get_database_stats()
-                embedded_messages = stats.get('embedded_messages', 0)
-                
-                # Only update if there's a significant difference (more than threshold new messages)
-                if total_messages - embedded_messages > self.embedding_update_threshold:
-                    logger.info(f"Detected {total_messages - embedded_messages} new messages, updating embeddings...")
-                    self.update_embeddings()
-                else:
-                    logger.debug(f"Skipping embedding update - only {total_messages - embedded_messages} new messages (threshold: {self.embedding_update_threshold})")
-                    logger.info(f"Using existing embeddings ({embedded_messages} messages, {total_messages - embedded_messages} new messages below threshold)")
+                # Quick check: only update if we detect significant new messages
+                # Get current message count from main database
+                if self.database.conn:
+                    cursor = self.database.get_cursor()
+                    cursor.execute("SELECT COUNT(*) FROM chat_message")
+                    total_messages = cursor.fetchone()[0]
+                    
+                    # Get embedded message count
+                    stats = self.get_database_stats()
+                    embedded_messages = stats.get('embedded_messages', 0)
+                    
+                    # Only update if there's a significant difference (more than threshold new messages)
+                    if total_messages - embedded_messages > effective_threshold:
+                        logger.info(f"Detected {total_messages - embedded_messages} new messages, updating embeddings...")
+                        self.update_embeddings()
+                    else:
+                        logger.debug(f"Skipping embedding update - only {total_messages - embedded_messages} new messages (threshold: {effective_threshold})")
+                        logger.info(f"Using existing embeddings ({embedded_messages} messages, {total_messages - embedded_messages} new messages below threshold)")
         
         # Ensure database is connected
         if not self.database.conn:

@@ -29,7 +29,7 @@ class MessageProcessor:
         self.database = database
         self.user_mapper = UserMapper(database)
         
-    def get_last_processed_timestamp(self, vector_db=None) -> int:
+    def get_last_processed_timestamp(self, vector_db=None) -> float:
         """
         Get the timestamp of the last processed message from vector database
         
@@ -37,7 +37,7 @@ class MessageProcessor:
             vector_db: Vector database connection (optional)
         
         Returns:
-            Timestamp as integer, or 0 if no messages have been processed
+            Timestamp as float, or 0.0 if no messages have been processed
         """
         try:
             # Use provided vector_db or try to use main database
@@ -53,18 +53,19 @@ class MessageProcessor:
             result = cursor.fetchone()
             
             if result and result[0]:
-                return int(float(result[0]))
-            return 0
+                # Keep full precision as float
+                return float(result[0])
+            return 0.0
         except Exception as e:
             logger.warning(f"⚠️ Could not get last processed timestamp: {e}")
-            return 0
+            return 0.0
             
-    def update_last_processed_timestamp(self, timestamp: int, vector_db=None) -> None:
+    def update_last_processed_timestamp(self, timestamp: float, vector_db=None) -> None:
         """
         Update the timestamp of the last processed message in vector database
         
         Args:
-            timestamp: Timestamp to store
+            timestamp: Timestamp to store (float for precision)
             vector_db: Vector database connection (optional)
         """
         try:
@@ -89,7 +90,7 @@ class MessageProcessor:
                     )
                 """)
             
-            # Update or insert timestamp
+            # Store timestamp with full precision
             cursor.execute("""
                 INSERT OR REPLACE INTO vector_metadata (key, value)
                 VALUES ('last_processed_timestamp', ?)
@@ -302,12 +303,12 @@ class MessageProcessor:
             
         return context
     
-    def process_messages(self, since_timestamp: Optional[int] = None, vector_db=None) -> List[Dict[str, Any]]:
+    def process_messages(self, since_timestamp: Optional[float] = None, vector_db=None) -> List[Dict[str, Any]]:
         """
         Process messages from the database
         
         Args:
-            since_timestamp: Only process messages after this timestamp
+            since_timestamp: Only process messages after this timestamp (float for precision)
             vector_db: Vector database connection for timestamp tracking
             
         Returns:
@@ -319,6 +320,7 @@ class MessageProcessor:
         if since_timestamp is None:
             since_timestamp = self.get_last_processed_timestamp(vector_db)
             
+        # Add safety check to prevent processing too many messages at once
         try:
             # Ensure database is connected
             if not self.database.conn:
@@ -326,6 +328,43 @@ class MessageProcessor:
                     raise RuntimeError("Failed to connect to database")
                     
             cursor = self.database.get_cursor()
+            
+            # First, check how many messages we would process
+            count_query = """
+                SELECT COUNT(*) FROM chat_message 
+                WHERE _createAt > ?
+            """
+            cursor.execute(count_query, (since_timestamp,))
+            message_count = cursor.fetchone()[0]
+            
+            # Safety check: if more than 5000 messages, something might be wrong
+            if message_count > 5000:
+                logger.warning(f"⚠️ About to process {message_count:,} messages (since timestamp {since_timestamp})")
+                logger.warning("⚠️ This seems excessive - there might be a timestamp issue")
+                
+                # Get the oldest message timestamp to compare
+                cursor.execute("SELECT MIN(_createAt) FROM chat_message")
+                oldest_timestamp = cursor.fetchone()[0]
+                
+                # Get the newest message timestamp
+                cursor.execute("SELECT MAX(_createAt) FROM chat_message")
+                newest_timestamp = cursor.fetchone()[0]
+                
+                logger.info(f"📊 Database timestamp range: {oldest_timestamp} to {newest_timestamp}")
+                logger.info(f"📊 Last processed timestamp: {since_timestamp}")
+                
+                # If the since_timestamp is older than the oldest message, reset it
+                if since_timestamp < oldest_timestamp:
+                    logger.warning(f"⚠️ Last processed timestamp ({since_timestamp}) is older than oldest message ({oldest_timestamp})")
+                    logger.warning("⚠️ Resetting to process only recent messages")
+                    # Set to process only messages from the last 7 days
+                    import time
+                    since_timestamp = time.time() - (7 * 24 * 60 * 60)
+                    
+                    # Recount with new timestamp
+                    cursor.execute(count_query, (since_timestamp,))
+                    message_count = cursor.fetchone()[0]
+                    logger.info(f"📊 After reset: will process {message_count:,} messages from last 7 days")
             
             # Query for messages after the timestamp
             query = """
@@ -365,9 +404,9 @@ class MessageProcessor:
                 dt = datetime.fromtimestamp(create_timestamp)
                 human_time = dt.strftime("%b %d, %Y at %I:%M %p")
                 
-                # Update latest timestamp
+                # Update latest timestamp (keep as float for precision)
                 if create_timestamp > latest_timestamp:
-                    latest_timestamp = create_timestamp
+                    latest_timestamp = float(create_timestamp)
                 
                 # Build message object
                 message = {

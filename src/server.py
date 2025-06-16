@@ -111,6 +111,8 @@ def initialize_search_engine():
             logger.info(f"Initial embeddings update: {update_result['new_messages']} new messages")
         else:
             logger.info(f"Found existing embeddings: {embedded_count} messages - skipping initialization")
+            # Set last update time to now to prevent immediate re-processing
+            search_engine.last_embedding_update_time = time.time()
         
         logger.info("SeaTalk Search MCP server started")
         return search_engine
@@ -118,7 +120,8 @@ def initialize_search_engine():
         logger.error(f"Failed to initialize search engine: {e}")
         return None
 
-# Don't initialize on import - wait for actual usage
+# Initialize search engine immediately on server startup
+search_engine = initialize_search_engine()
 
 # Register cleanup handler
 def cleanup():
