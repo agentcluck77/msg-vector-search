@@ -262,6 +262,13 @@ class UserMapper:
         
         return self._user_cache.get(user_id_int, f"User {user_id}")
     
+    def preload_users(self) -> None:
+        """Preload user mappings for batch processing"""
+        if not self._cache_loaded:
+            logger.info("🔄 Preloading user mappings...")
+            self._load_user_names()
+        logger.info(f"✓ User mappings preloaded ({len(self._user_cache)} users)")
+    
     def get_all_users(self) -> Dict[int, str]:
         """Get all user mappings"""
         if not self._cache_loaded:

@@ -53,8 +53,22 @@ class MessageProcessor:
             result = cursor.fetchone()
             
             if result and result[0]:
-                # Keep full precision as float
-                return float(result[0])
+                timestamp = float(result[0])
+                
+                # Validate timestamp - ensure it's not corrupted
+                import time
+                current_time = time.time()
+                
+                # If timestamp is in the future or more than 10 years old, it's likely corrupted
+                if timestamp > current_time + 86400:  # More than 1 day in the future
+                    logger.warning(f"⚠️ Last processed timestamp {timestamp} is in the future, resetting to 0")
+                    return 0.0
+                elif timestamp < current_time - (10 * 365 * 24 * 60 * 60):  # More than 10 years old
+                    logger.warning(f"⚠️ Last processed timestamp {timestamp} is more than 10 years old, using recent timestamp")
+                    # Return timestamp for last 30 days instead of 0
+                    return current_time - (30 * 24 * 60 * 60)
+                
+                return timestamp
             return 0.0
         except Exception as e:
             logger.warning(f"⚠️ Could not get last processed timestamp: {e}")
@@ -303,13 +317,15 @@ class MessageProcessor:
             
         return context
     
-    def process_messages(self, since_timestamp: Optional[float] = None, vector_db=None) -> List[Dict[str, Any]]:
+    def process_messages(self, since_timestamp: Optional[float] = None, vector_db=None, batch_size: int = 1000, max_messages: int = 10000) -> List[Dict[str, Any]]:
         """
-        Process messages from the database
+        Process messages from the database in batches
         
         Args:
             since_timestamp: Only process messages after this timestamp (float for precision)
             vector_db: Vector database connection for timestamp tracking
+            batch_size: Number of messages to process in each batch (default: 1000)
+            max_messages: Maximum total messages to process (default: 10000)
             
         Returns:
             List of processed messages
@@ -337,10 +353,10 @@ class MessageProcessor:
             cursor.execute(count_query, (since_timestamp,))
             message_count = cursor.fetchone()[0]
             
-            # Safety check: if more than 5000 messages, something might be wrong
-            if message_count > 5000:
+            # Safety check and smart limiting
+            if message_count > max_messages:
                 logger.warning(f"⚠️ About to process {message_count:,} messages (since timestamp {since_timestamp})")
-                logger.warning("⚠️ This seems excessive - there might be a timestamp issue")
+                logger.warning(f"⚠️ This exceeds the limit of {max_messages:,} messages")
                 
                 # Get the oldest message timestamp to compare
                 cursor.execute("SELECT MIN(_createAt) FROM chat_message")
@@ -365,73 +381,127 @@ class MessageProcessor:
                     cursor.execute(count_query, (since_timestamp,))
                     message_count = cursor.fetchone()[0]
                     logger.info(f"📊 After reset: will process {message_count:,} messages from last 7 days")
+                
+                # If still too many messages, process only the most recent ones
+                if message_count > max_messages:
+                    logger.warning(f"⚠️ Still too many messages ({message_count:,}), limiting to {max_messages:,} most recent")
+                    # Find a timestamp that gives us approximately max_messages
+                    cursor.execute(f"""
+                        SELECT _createAt FROM chat_message 
+                        WHERE _createAt > ? 
+                        ORDER BY _createAt DESC 
+                        LIMIT 1 OFFSET {max_messages - 1}
+                    """, (since_timestamp,))
+                    result = cursor.fetchone()
+                    if result:
+                        since_timestamp = result[0]
+                        # Recount with new timestamp
+                        cursor.execute(count_query, (since_timestamp,))
+                        message_count = cursor.fetchone()[0]
+                        logger.info(f"📊 After limiting: will process {message_count:,} messages")
             
-            # Query for messages after the timestamp
-            query = """
-                SELECT 
-                    sid, _mid, c, t, _createAt, u
-                FROM chat_message 
-                WHERE _createAt > ?
-                ORDER BY _createAt ASC
-            """
+            # Optimize database for bulk operations
+            cursor.execute("PRAGMA cache_size = 10000")  # Larger cache
+            cursor.execute("PRAGMA temp_store = MEMORY")  # Store temp data in memory
+            cursor.execute("PRAGMA journal_mode = WAL")  # Write-Ahead Logging
             
-            cursor.execute(query, (since_timestamp,))
+            # Process messages in batches to avoid memory issues
+            logger.info(f"📊 Processing {message_count:,} messages in batches of {batch_size:,}")
             
-            messages = []
+            all_messages = []
             latest_timestamp = since_timestamp
+            processed_count = 0
+            batch_num = 0
             
-            for row in cursor:
-                session_id, message_id, content, msg_type, create_timestamp, user_id = row
+            # Calculate total batches for progress tracking
+            total_batches = (message_count + batch_size - 1) // batch_size
+            
+            # Pre-cache user mappings to avoid repeated queries
+            logger.info("🔄 Pre-caching user mappings...")
+            self.user_mapper.preload_users()
+            
+            while processed_count < message_count:
+                batch_num += 1
+                logger.info(f"📦 Processing batch {batch_num}/{total_batches} (messages {processed_count + 1:,}-{min(processed_count + batch_size, message_count):,})")
                 
-                # Extract and clean text content
-                text_content = self.extract_text_from_content(content, msg_type)
-                clean_text = self.clean_text_content(text_content)
+                # Optimized query for this batch of messages
+                query = """
+                    SELECT 
+                        sid, _mid, c, t, _createAt, u
+                    FROM chat_message 
+                    WHERE _createAt > ?
+                    ORDER BY _createAt ASC
+                    LIMIT ? OFFSET ?
+                """
                 
-                # Skip empty messages
-                if not clean_text:
-                    continue
+                cursor.execute(query, (since_timestamp, batch_size, processed_count))
+                
+                batch_messages = []
+                batch_latest_timestamp = latest_timestamp
+                
+                for row in cursor:
+                    session_id, message_id, content, msg_type, create_timestamp, user_id = row
                     
-                # Get user name
-                user_name = self.get_user_name(user_id)
+                    # Extract and clean text content
+                    text_content = self.extract_text_from_content(content, msg_type)
+                    clean_text = self.clean_text_content(text_content)
+                    
+                    # Skip empty messages
+                    if not clean_text:
+                        continue
+                        
+                    # Get user name
+                    user_name = self.get_user_name(user_id)
+                    
+                    # Get conversation info
+                    conv_name, conv_type = self.get_conversation_name(session_id)
+                    
+                    # Get message context
+                    context = self.get_message_context(message_id, session_id)
+                    
+                    # Format datetime
+                    dt = datetime.fromtimestamp(create_timestamp)
+                    human_time = dt.strftime("%b %d, %Y at %I:%M %p")
+                    
+                    # Update latest timestamp (keep as float for precision)
+                    if create_timestamp > batch_latest_timestamp:
+                        batch_latest_timestamp = float(create_timestamp)
+                    
+                    # Build message object
+                    message = {
+                        "message_id": message_id,
+                        "session_id": session_id,
+                        "user_id": user_id,
+                        "user_name": user_name,
+                        "text_content": clean_text,
+                        "timestamp": create_timestamp,
+                        "human_time": human_time,
+                        "conversation": {
+                            "type": conv_type,
+                            "name": conv_name
+                        },
+                        "context": context
+                    }
+                    
+                    batch_messages.append(message)
                 
-                # Get conversation info
-                conv_name, conv_type = self.get_conversation_name(session_id)
+                # Update latest timestamp after each batch
+                if batch_latest_timestamp > latest_timestamp:
+                    latest_timestamp = batch_latest_timestamp
+                    self.update_last_processed_timestamp(latest_timestamp, vector_db)
                 
-                # Get message context
-                context = self.get_message_context(message_id, session_id)
+                # Add batch to all messages
+                all_messages.extend(batch_messages)
+                processed_count += batch_size
                 
-                # Format datetime
-                dt = datetime.fromtimestamp(create_timestamp)
-                human_time = dt.strftime("%b %d, %Y at %I:%M %p")
+                logger.info(f"✓ Batch {batch_num} processed: {len(batch_messages)} valid messages")
                 
-                # Update latest timestamp (keep as float for precision)
-                if create_timestamp > latest_timestamp:
-                    latest_timestamp = float(create_timestamp)
-                
-                # Build message object
-                message = {
-                    "message_id": message_id,
-                    "session_id": session_id,
-                    "user_id": user_id,
-                    "user_name": user_name,
-                    "text_content": clean_text,
-                    "timestamp": create_timestamp,
-                    "human_time": human_time,
-                    "conversation": {
-                        "type": conv_type,
-                        "name": conv_name
-                    },
-                    "context": context
-                }
-                
-                messages.append(message)
+                # Small delay to prevent overwhelming the system
+                import time
+                time.sleep(0.1)
             
-            # Update last processed timestamp
-            if latest_timestamp > since_timestamp:
-                self.update_last_processed_timestamp(latest_timestamp, vector_db)
-            
-            logger.info(f"✓ Processed {len(messages)} new messages")
-            return messages
+            logger.info(f"✅ Processed {len(all_messages)} new messages in {batch_num} batches")
+            return all_messages
             
         except Exception as e:
             logger.error(f"❌ Failed to process messages: {e}")

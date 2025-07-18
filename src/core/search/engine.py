@@ -54,10 +54,14 @@ class SemanticSearchEngine:
         except Exception as e:
             logger.warning(f"⚠️ Failed to pre-load embedding model: {e}")
         
-    def update_embeddings(self) -> Dict[str, Any]:
+    def update_embeddings(self, batch_size: int = 1000, max_messages: int = 10000) -> Dict[str, Any]:
         """
         Update embeddings for new messages
         
+        Args:
+            batch_size: Number of messages to process in each batch
+            max_messages: Maximum total messages to process
+            
         Returns:
             Dictionary with update statistics
         """
@@ -68,8 +72,8 @@ class SemanticSearchEngine:
         vector_db = getattr(self.embedding_processor, 'vector_db', None)
         last_timestamp = self.message_processor.get_last_processed_timestamp(vector_db)
         
-        # Process new messages
-        messages = self.message_processor.process_messages(last_timestamp, vector_db)
+        # Process new messages with batch processing
+        messages = self.message_processor.process_messages(last_timestamp, vector_db, batch_size, max_messages)
         
         if not messages:
             logger.info("No new messages to process")
@@ -79,7 +83,7 @@ class SemanticSearchEngine:
                 "update_time_ms": int((time.time() - start_time) * 1000)
             }
         
-        # Generate embeddings
+        # Generate embeddings with hardware-optimized batch size
         messages_with_embeddings = self.embedding_processor.generate_embeddings(messages)
         
         # Store embeddings
